@@ -21,7 +21,9 @@ from transformers.modeling_outputs import (
 )
 from typing import Optional, Tuple, Union
 
-from .modules import ByteNetEncoder, ConvNetEncoder, MLP, CNN
+from .modules import (
+    ByteNetEncoder, ConvNetEncoder, MLP, CNN, UpPyramid, UNetEncoder,
+)
 from transformers import RoFormerConfig
 from transformers.models.roformer.modeling_roformer import (
     RoFormerEncoder,
@@ -33,6 +35,7 @@ ENCODER_CLASS = {
     "bytenet": ByteNetEncoder,
     "convnet": ConvNetEncoder,
     "roformer": RoFormerEncoder,
+    "unet": UNetEncoder,
 }
 
 
@@ -113,6 +116,26 @@ def compute_loss(logits, labels, output_probs, loss_weight, vocab_size):
     return loss
 
 
+class UNetMLMHead(nn.Module):
+    def __init__(
+        self,
+        config,
+    ):
+        super().__init__()
+        self.config = config
+        dims = self.model.config.dims[::-1]
+        kernel_sizes = [self.config.rest_kernel_size] * len(dims)
+        self.up_pyramid = UpPyramid(dims=dims, kernel_sizes=kernel_sizes, bias=config.bias)
+        self.decoder = nn.Linear(config.base_hidden_size, config.vocab_size, bias=config.bias)
+
+    def forward(self, base_model_output):
+        hidden_states = self.up_pyramid(
+            base_model_output.last_hidden_state, base_model_output.hidden_states[::-1]
+        )
+        hidden_states = self.decoder(hidden_states)
+        return hidden_states
+
+
 class MLMHead(nn.Module):
     def __init__(
         self,
@@ -130,8 +153,8 @@ class MLMHead(nn.Module):
             self.transform = nn.Identity()
         self.decoder = nn.Linear(config.hidden_size, config.vocab_size, bias=config.bias)
 
-    def forward(self, hidden_states):
-        hidden_states = self.transform(hidden_states)
+    def forward(self, base_model_output):
+        hidden_states = self.transform(base_model_output.last_hidden_state)
         hidden_states = self.decoder(hidden_states)
         return hidden_states
 
@@ -327,11 +350,8 @@ class GPNModel(GPNPreTrainedModel):
         )
         x = self.encoder(x)
 
-
         # should be optional
-        x = self.ln_f(x.last_hidden_state)
-        x = BaseModelOutput(last_hidden_state=x)
-
+        x.last_hidden_state = self.ln_f(x.last_hidden_state)
 
         return x
 
@@ -346,14 +366,15 @@ class GPNForMaskedLM(GPNPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
         self.model = GPNModel(config)
-        self.cls = MLMHead(config)
+        cls_class = UNetMLMHead if config.encoder == "unet" else MLMHead
+        self.cls = cls_class(config)
 
         # Initialize weights and apply final processing
         self.post_init()
 
     def forward(self, labels=None, output_probs=None, loss_weight=None, **kwargs):
-        hidden_state = self.model(**kwargs).last_hidden_state
-        logits = self.cls(hidden_state)
+        base_model_output = self.model(**kwargs)
+        logits = self.cls(base_model_output)
         loss = compute_loss(
             logits, labels, output_probs, loss_weight, self.config.vocab_size
         )

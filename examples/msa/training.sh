@@ -4,7 +4,7 @@
 # https://huggingface.co/datasets/songlab/multiz100way
 msa_path="/share/kuleshov/emm392/lrb_benchmark_boilerplate/gpn_data/89.zarr"
 training_windows_path="songlab/gpn-msa-sapiens-dataset"
-output_path="checkpoints"  # TODO: might need to do mkdir
+output_path="/share/kuleshov/emm392/gpn_distillation/ckpts"  # TODO: might need to do mkdir
 mkdir -p $output_path
 
 # Hyperparameters

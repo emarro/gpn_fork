@@ -389,6 +389,7 @@ def main():
     else:
         logger.info("Training new model from scratch")
         model = AutoModelForMaskedLM.from_config(config)
+    print(model)
 
     genome_msa = GenomeMSA(data_args.msa_path, in_memory=False)
 
@@ -449,6 +450,11 @@ def main():
         Tokenizer(),
         mlm_probability=data_args.mlm_probability,
     )
+
+    #Get around issue with saving model with tied weights
+    model.cls.predictions.bias = torch.nn.Parameter(torch.clone(model.cls.predictions.decoder.bias))
+    #model.cls.predictions.decoder.bias
+
 
     # Initialize our Trainer
     trainer = Trainer(

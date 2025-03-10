@@ -23,7 +23,9 @@ source setup_env.sh
 # Data sources and output 
 # see README for how to download and unzip MSA:
 # https://huggingface.co/datasets/songlab/multiz100way
-run_name="no_msa"
+temp=1.0
+alpha=0.5
+run_name="KD_temp_${temp}_alpha_${alpha}"
 msa_path="/share/kuleshov/emm392/lrb_benchmark_boilerplate/gpn_data/89.zarr"
 training_windows_path="songlab/gpn-msa-sapiens-dataset"
 output_path="/share/kuleshov/emm392/gpn_distillation/ckpts/${run_name}"  # TODO: might need to do mkdir
@@ -33,7 +35,7 @@ mkdir -p $output_path
 max_steps=60_000 # just for demonstration, should be 30_000 in a real run
 loss_weight=0.1
 seed=42
-use_aux_features=False
+use_aux_features=True
 weight_conserved=True
 flip_nonconserved=True
 n_aux_features=0 #$((89 * 5)) # (n_species * #{A,C,G,T,-})
@@ -61,9 +63,9 @@ WANDB_PROJECT=GPN_MSA_SAPIENS_EXAMPLE ${torchrun_path} --nproc_per_node=${n_gpu}
     --seed ${seed} \
     --dataloader_num_workers ${dataloader_num_workers} \
     --save_strategy steps --save_steps 2500 --evaluation_strategy steps \
-    --eval_steps 2500 --logging_steps 2500 --max_steps ${max_steps} \
+    --eval_steps 1250 --logging_steps 1250 --max_steps ${max_steps} \
     --warmup_steps 1000 --save_total_limit 1 --load_best_model_at_end \
-    --model_type GPNRoFormer --config_overrides ${config_overrides} \
+    --model_type GPNRoFormerWithKD --config_overrides ${config_overrides} \
     --use_aux_features ${use_aux_features} \
     --weight_conserved ${weight_conserved} \
     --flip_nonconserved ${flip_nonconserved} \
@@ -71,4 +73,6 @@ WANDB_PROJECT=GPN_MSA_SAPIENS_EXAMPLE ${torchrun_path} --nproc_per_node=${n_gpu}
     --per_device_train_batch_size ${per_device_batch_size} \
     --per_device_eval_batch_size ${per_device_batch_size} \
     --gradient_accumulation_steps ${gradient_accumulation_steps} \
-    --torch_compile
+    --torch_compile \
+    --alpha ${alpha} \
+    --temperature ${temperature}

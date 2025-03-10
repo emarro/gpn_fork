@@ -308,6 +308,20 @@ class GPNRoFormerConfig(RoFormerConfig):
         self.n_aux_features = n_aux_features
         self.group_tokens = group_tokens
 
+class GPNRoFormerKDConfig(GPNRoFormerConfig):
+    model_type = "GPNRoFormerKD"
+    def __init__(self, 
+                 vocab_size=6, 
+                 aux_features_vocab_size=5, 
+                 n_aux_features=0, 
+                 group_tokens=1, 
+                 alpha=0.5,
+                 temperature=2.0,
+                 **kwargs):
+        super().__init__(vocab_size, aux_features_vocab_size, n_aux_features, group_tokens, **kwargs)
+        self.alpha = alpha
+        self.temperature = temperature
+
 
 class GPNRoFormerPreTrainedModel(PreTrainedModel):
     config_class = GPNRoFormerConfig
@@ -375,6 +389,46 @@ class GPNRoFormerForMaskedLM(GPNRoFormerPreTrainedModel):
             logits=logits,
         )
 
+class GPNRoFormerForMLMWithKD(GPNRoFormerForMaskedLM):
+    def __init__(self, config):
+        super().__init__(config)
+        self.teacher_model = AutoModelForMaskedLM.from_pretrained("songlab/gpn-msa-sapiens", trust_remote_code=True)
+        # break weighttie
+        self.teacher_model.cls.predictions.bias = torch.nn.Parameter(torch.clone(self.teacher_model.cls.predictions.decoder.bias))
+
+    def compute_kd_loss(self, student_logits, teacher_logits, student_hiddens, teacher_hiddens, temperature=2.0, **kwargs):
+        teacher_probs = torch.softmax(teacher_logits / temperature, dim=-1)
+        distillation_loss = F.cross_entropy(student_logits / temperature, teacher_probs, reduction='mean')
+        return distillation_loss
+
+    def forward(self, labels=None, output_probs=None, loss_weight=None, **kwargs):
+        aux_features = kwargs['aux_features']
+        kwargs['aux_features'] = None # remove MSA for student
+        student_hidden_states = self.model(**kwargs)
+        kwargs['aux_features'] = aux_features # add MSA back in for teacher
+        student_logits = self.cls(student_hidden_states.last_hidden_state)
+        mlm_loss = compute_loss(
+                student_logits, labels, output_probs, loss_weight, self.config.vocab_size
+        )
+        if not self.model.training: #if we're in eval, don't bother with the teacher fwd pass 
+            with torch.no_grad():
+                teacher_hidden_states = self.teacher_model.model(**kwargs)
+                teacher_logits = self.teacher_model.cls(teacher_hidden_states.last_hidden_state)
+            kd_loss = self.compute_kd_loss(
+                student_logits= student_logits,
+                teacher_logits= teacher_logits,
+                student_hiddens= student_hidden_states,
+                teacher_hiddens= teacher_hidden_states,
+                temperature= self.config.temperature
+            )
+            alpha = self.config.alpha
+            loss =  (alpha * mlm_loss) + ((1 - alpha) * kd_loss)
+        else:
+            loss = mlm_loss
+        return MaskedLMOutput(
+            loss=loss,
+            logits=student_logits
+        )
 
 class TransposeLayer(nn.Module):
     def __init__(

@@ -490,10 +490,10 @@ AutoModel.register(ConvNetConfig, ConvNetModel)
 AutoModelForMaskedLM.register(ConvNetConfig, ConvNetForMaskedLM)
 AutoModelForSequenceClassification.register(ConvNetConfig, ConvNetForSequenceClassification)
 
-from .legacy import GPNRoFormerConfig, GPNRoFormerModel, GPNRoFormerForMaskedLM, GPNRoFormerKDConfig, GPNRoFormerForMLMWithKD
+from .legacy import GPNRoFormerConfig, GPNRoFormerModel, GPNRoFormerForMaskedLM, GPNRoFormerKDConfig, GPNRoFormerForMLMKD
 AutoConfig.register("GPNRoFormer", GPNRoFormerConfig)
 AutoModel.register(GPNRoFormerConfig, GPNRoFormerModel)
 AutoModelForMaskedLM.register(GPNRoFormerConfig, GPNRoFormerForMaskedLM)
 
-AutoConfig.register("GPNRoFormerWithKD", GPNRoFormerKDConfig)
-AutoModelForMaskedLM.register(GPNRoFormerKDConfig, GPNRoFormerForMLMWithKD)
+AutoConfig.register("GPNRoFormerKD", GPNRoFormerKDConfig)
+AutoModelForMaskedLM.register(GPNRoFormerKDConfig, GPNRoFormerForMLMKD)

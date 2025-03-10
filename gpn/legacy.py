@@ -389,7 +389,8 @@ class GPNRoFormerForMaskedLM(GPNRoFormerPreTrainedModel):
             logits=logits,
         )
 
-class GPNRoFormerForMLMWithKD(GPNRoFormerForMaskedLM):
+class GPNRoFormerForMLMKD(GPNRoFormerForMaskedLM):
+    config_class = GPNRoFormerKDConfig
     def __init__(self, config):
         super().__init__(config)
         self.teacher_model = AutoModelForMaskedLM.from_pretrained("songlab/gpn-msa-sapiens", trust_remote_code=True)

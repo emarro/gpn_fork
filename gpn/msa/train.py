@@ -238,6 +238,19 @@ class ModelArguments:
             )
         },
     )
+    temperature: float = field(
+        default=2.0,
+        metadata={
+            "help": "The Temperature to use for smoothing the logits of the student and teacher models"
+        }
+    )
+
+    alpha: float = field(
+        default=0.5,
+        metadata={
+            "help": "The weight to use for the convex combination of the MLM loss and the knoweldge distillation loss"
+        }
+    )
 
     def __post_init__(self):
         if self.config_overrides is not None and (
